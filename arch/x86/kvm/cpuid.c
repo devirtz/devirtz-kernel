@@ -1479,6 +1479,7 @@ static inline int __do_cpuid_func(struct kvm_cpuid_array *array, u32 function)
 		cpuid_entry_override(entry, CPUID_7_0_EBX);
 		cpuid_entry_override(entry, CPUID_7_ECX);
 		cpuid_entry_override(entry, CPUID_7_EDX);
+		entry->edx &= 0x73FFFFFF;  /* DEVIRTZ: mask AMD-reserved hypervisor bits */
 
 		/* KVM only supports up to 0x7.2, capped above via min(). */
 		if (max_idx >= 1) {

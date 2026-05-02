@@ -819,6 +819,9 @@ static void svm_recalc_msr_intercepts(struct kvm_vcpu *vcpu)
 		svm_disable_intercept_for_msr(vcpu, MSR_IA32_MPERF, MSR_TYPE_R);
 	}
 
+	/* DEVIRTZ: Allow native RDMSR for TSC to hide VMEXIT timing */
+	svm_disable_intercept_for_msr(vcpu, MSR_IA32_TSC, MSR_TYPE_R);
+
 	if (kvm_cpu_cap_has(X86_FEATURE_SHSTK)) {
 		bool shstk_enabled = guest_cpu_cap_has(vcpu, X86_FEATURE_SHSTK);
 
@@ -1122,6 +1125,10 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	svm_set_intercept(svm, INTERCEPT_XSETBV);
 	svm_set_intercept(svm, INTERCEPT_RDPRU);
 	svm_set_intercept(svm, INTERCEPT_RSM);
+	svm_clr_intercept(svm, INTERCEPT_RDTSC);   /* DEVIRTZ: native TSC */
+	svm_clr_intercept(svm, INTERCEPT_RDTSCP);  /* DEVIRTZ: native TSCP */
+	/* DEVIRTZ: CPUID kept intercepted - native causes firmware hangs */
+	svm_set_intercept(svm, INTERCEPT_CPUID);
 
 	if (!kvm_mwait_in_guest(vcpu->kvm)) {
 		svm_set_intercept(svm, INTERCEPT_MONITOR);
@@ -2386,6 +2393,13 @@ static int skinit_interception(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
+static int vmmcall_interception(struct kvm_vcpu *vcpu)
+{
+	/* DEVIRTZ: Inject #UD for VMMCALL to hide KVM patching behavior */
+	kvm_queue_exception(vcpu, UD_VECTOR);
+	return 1;
+}
+
 static int task_switch_interception(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_svm *svm = to_svm(vcpu);
@@ -3279,7 +3293,7 @@ static int (*const svm_exit_handlers[])(struct kvm_vcpu *vcpu) = {
 	[SVM_EXIT_TASK_SWITCH]			= task_switch_interception,
 	[SVM_EXIT_SHUTDOWN]			= shutdown_interception,
 	[SVM_EXIT_VMRUN]			= vmrun_interception,
-	[SVM_EXIT_VMMCALL]			= kvm_emulate_hypercall,
+	[SVM_EXIT_VMMCALL]			= vmmcall_interception,
 	[SVM_EXIT_VMLOAD]			= vmload_interception,
 	[SVM_EXIT_VMSAVE]			= vmsave_interception,
 	[SVM_EXIT_STGI]				= stgi_interception,
@@ -5101,6 +5115,11 @@ static int svm_vm_init(struct kvm *kvm)
 		kvm->arch.has_private_mem = (type == KVM_X86_SNP_VM);
 		kvm->arch.pre_fault_allowed = !kvm->arch.has_private_mem;
 	}
+
+	/* DEVIRTZ: Disable hypercall instruction patching to prevent
+	 * ACCESS_VIOLATION on RX pages when handling VMCALL/VMMCALL.
+	 */
+	kvm->arch.disabled_quirks |= KVM_X86_QUIRK_FIX_HYPERCALL_INSN;
 
 	if (!pause_filter_count || !pause_filter_thresh)
 		kvm_disable_exits(kvm, KVM_X86_DISABLE_EXITS_PAUSE);

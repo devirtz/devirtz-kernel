@@ -1265,7 +1265,6 @@ int __kvm_set_xcr(struct kvm_vcpu *vcpu, u32 index, u64 xcr)
 {
 	u64 xcr0 = xcr;
 	u64 old_xcr0 = vcpu->arch.xcr0;
-	u64 valid_bits;
 
 	/* Only support XCR_XFEATURE_ENABLED_MASK(xcr0) now  */
 	if (index != XCR_XFEATURE_ENABLED_MASK)
@@ -1273,15 +1272,6 @@ int __kvm_set_xcr(struct kvm_vcpu *vcpu, u32 index, u64 xcr)
 	if (!(xcr0 & XFEATURE_MASK_FP))
 		return 1;
 	if ((xcr0 & XFEATURE_MASK_YMM) && !(xcr0 & XFEATURE_MASK_SSE))
-		return 1;
-
-	/*
-	 * Do not allow the guest to set bits that we do not support
-	 * saving.  However, xcr0 bit 0 is always set, even if the
-	 * emulated CPU does not support XSAVE (see kvm_vcpu_reset()).
-	 */
-	valid_bits = vcpu->arch.guest_supported_xcr0 | XFEATURE_MASK_FP;
-	if (xcr0 & ~valid_bits)
 		return 1;
 
 	if ((!(xcr0 & XFEATURE_MASK_BNDREGS)) !=
@@ -3906,6 +3896,10 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 	u32 msr = msr_info->index;
 	u64 data = msr_info->data;
 
+	if (msr == MSR_KVM_WALL_CLOCK || msr == MSR_KVM_SYSTEM_TIME ||
+	    ((msr >= 0x4b564d00) && (msr <= 0x4b564dff)))
+		return 1;
+
 	/*
 	 * Do not allow host-initiated writes to trigger the Xen hypercall
 	 * page setup; it could incur locking paths which are not expected
@@ -4093,10 +4087,11 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		}
 		break;
 	case MSR_IA32_XSS:
-		if (!guest_cpuid_has(vcpu, X86_FEATURE_XSAVES))
-			return KVM_MSR_RET_UNSUPPORTED;
+		/* DEVIRTZ: Bypass guest_cpuid_has check for native CPUID mode */
+		/* if (!guest_cpuid_has(vcpu, X86_FEATURE_XSAVES))
+			return KVM_MSR_RET_UNSUPPORTED; */
 
-		if (data & ~vcpu->arch.guest_supported_xss)
+		if (data & ~kvm_caps.supported_xss)
 			return 1;
 		if (vcpu->arch.ia32_xss == data)
 			break;
@@ -4296,7 +4291,8 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		if (kvm_pmu_is_valid_msr(vcpu, msr))
 			return kvm_pmu_set_msr(vcpu, msr_info);
 
-		return KVM_MSR_RET_UNSUPPORTED;
+		if (rdmsrq_safe(msr, &data))
+			return 1;
 	}
 	return 0;
 }
@@ -4354,7 +4350,13 @@ static int get_msr_mce(struct kvm_vcpu *vcpu, u32 msr, u64 *pdata, bool host)
 
 int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 {
-	switch (msr_info->index) {
+	u32 msr = msr_info->index;
+
+	if (msr == MSR_KVM_WALL_CLOCK || msr == MSR_KVM_SYSTEM_TIME ||
+	    ((msr >= 0x4b564d00) && (msr <= 0x4b564dff)))
+		return 1;
+
+	switch (msr) {
 	case MSR_IA32_PLATFORM_ID:
 	case MSR_IA32_EBL_CR_POWERON:
 	case MSR_IA32_LASTBRANCHFROMIP:
@@ -4558,9 +4560,10 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		return get_msr_mce(vcpu, msr_info->index, &msr_info->data,
 				   msr_info->host_initiated);
 	case MSR_IA32_XSS:
-		if (!msr_info->host_initiated &&
+		/* DEVIRTZ: Bypass guest_cpuid_has check for native CPUID mode */
+		/* if (!msr_info->host_initiated &&
 		    !guest_cpuid_has(vcpu, X86_FEATURE_XSAVES))
-			return 1;
+			return 1; */
 		msr_info->data = vcpu->arch.ia32_xss;
 		break;
 	case MSR_K7_CLK_CTL:
@@ -4649,7 +4652,8 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		if (kvm_pmu_is_valid_msr(vcpu, msr_info->index))
 			return kvm_pmu_get_msr(vcpu, msr_info);
 
-		return KVM_MSR_RET_UNSUPPORTED;
+		if (rdmsrq_safe(msr_info->index, &msr_info->data))
+			return 1;
 	}
 	return 0;
 }

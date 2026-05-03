@@ -79,15 +79,16 @@ static bool kvm_mtrr_valid(struct kvm_vcpu *vcpu, u32 msr, u64 data)
 			   msr <= MTRRphysMask_MSR(KVM_NR_VAR_MTRR - 1))))
 		return false;
 
-	mask = kvm_vcpu_reserved_gpa_bits_raw(vcpu);
 	if ((msr & 1) == 0) {
 		/* MTRR base */
+		mask = kvm_vcpu_reserved_gpa_bits_raw(vcpu) | 0xf00;
 		if (!valid_mtrr_type(data & 0xff))
 			return false;
-		mask |= 0xf00;
 	} else {
-		/* MTRR mask */
-		mask |= 0x7ff;
+		/* MTRR mask: DEVIRTZ added, only check lower 11 control bits,
+		 * skip GPA reserved bits since native CPUID reports host
+		 * PhysBits which may exceed guest-phys-bits-limit */
+		mask = 0x7ff;
 	}
 
 	return (data & mask) == 0;

@@ -814,13 +814,8 @@ static void svm_recalc_msr_intercepts(struct kvm_vcpu *vcpu)
 	svm_set_intercept_for_msr(vcpu, MSR_IA32_SYSENTER_ESP, MSR_TYPE_RW,
 				  guest_cpuid_is_intel_compatible(vcpu));
 
-	if (kvm_aperfmperf_in_guest(vcpu->kvm)) {
-		svm_disable_intercept_for_msr(vcpu, MSR_IA32_APERF, MSR_TYPE_R);
-		svm_disable_intercept_for_msr(vcpu, MSR_IA32_MPERF, MSR_TYPE_R);
-	}
-
-	/* DEVIRTZ: Allow native RDMSR for TSC to hide VMEXIT timing */
-	svm_disable_intercept_for_msr(vcpu, MSR_IA32_TSC, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, MSR_IA32_APERF, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, MSR_IA32_MPERF, MSR_TYPE_R);
 
 	if (kvm_cpu_cap_has(X86_FEATURE_SHSTK)) {
 		bool shstk_enabled = guest_cpu_cap_has(vcpu, X86_FEATURE_SHSTK);
@@ -842,6 +837,8 @@ static void svm_recalc_msr_intercepts(struct kvm_vcpu *vcpu)
 	 * x2APIC intercepts are modified on-demand and cannot be filtered by
 	 * userspace.
 	 */
+
+	svm_disable_intercept_for_msr(vcpu, MSR_IA32_TSC, MSR_TYPE_R);
 }
 
 void svm_copy_lbrs(struct vmcb *to_vmcb, struct vmcb *from_vmcb)
@@ -1085,7 +1082,7 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	set_dr_intercepts(svm);
 
 	set_exception_intercept(svm, PF_VECTOR);
-	set_exception_intercept(svm, UD_VECTOR);
+	set_exception_intercept(svm, UD_VECTOR); /* DEVIRTZ */
 	set_exception_intercept(svm, MC_VECTOR);
 	set_exception_intercept(svm, AC_VECTOR);
 	set_exception_intercept(svm, DB_VECTOR);
@@ -1106,7 +1103,7 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 
 	svm_set_intercept(svm, INTERCEPT_SELECTIVE_CR0);
 	svm_set_intercept(svm, INTERCEPT_RDPMC);
-	svm_set_intercept(svm, INTERCEPT_CPUID);
+	svm_clr_intercept(svm, INTERCEPT_CPUID); /* DEVIRTZ: native CPUID — debug */
 	svm_set_intercept(svm, INTERCEPT_INVD);
 	svm_set_intercept(svm, INTERCEPT_INVLPG);
 	svm_set_intercept(svm, INTERCEPT_INVLPGA);
@@ -1115,7 +1112,7 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	svm_set_intercept(svm, INTERCEPT_TASK_SWITCH);
 	svm_set_intercept(svm, INTERCEPT_SHUTDOWN);
 	svm_set_intercept(svm, INTERCEPT_VMRUN);
-	svm_set_intercept(svm, INTERCEPT_VMMCALL);
+	svm_clr_intercept(svm, INTERCEPT_VMMCALL);
 	svm_set_intercept(svm, INTERCEPT_VMLOAD);
 	svm_set_intercept(svm, INTERCEPT_VMSAVE);
 	svm_set_intercept(svm, INTERCEPT_STGI);
@@ -1123,12 +1120,10 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	svm_set_intercept(svm, INTERCEPT_SKINIT);
 	svm_set_intercept(svm, INTERCEPT_WBINVD);
 	svm_set_intercept(svm, INTERCEPT_XSETBV);
-	svm_set_intercept(svm, INTERCEPT_RDPRU);
+	svm_clr_intercept(svm, INTERCEPT_RDPRU);
 	svm_set_intercept(svm, INTERCEPT_RSM);
-	svm_clr_intercept(svm, INTERCEPT_RDTSC);   /* DEVIRTZ: native TSC */
-	svm_clr_intercept(svm, INTERCEPT_RDTSCP);  /* DEVIRTZ: native TSCP */
-	/* DEVIRTZ: CPUID kept intercepted - native causes firmware hangs */
-	svm_set_intercept(svm, INTERCEPT_CPUID);
+	// svm_clr_intercept(svm, INTERCEPT_RDTSC);	/* DEVIRTZ: native TSC */
+	// svm_clr_intercept(svm, INTERCEPT_RDTSCP);	/* DEVIRTZ: native TSCP */
 
 	if (!kvm_mwait_in_guest(vcpu->kvm)) {
 		svm_set_intercept(svm, INTERCEPT_MONITOR);

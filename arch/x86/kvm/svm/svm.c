@@ -1112,7 +1112,7 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	svm_clr_intercept(svm, INTERCEPT_TASK_SWITCH);		/* DEVIRTZ: native */
 	svm_set_intercept(svm, INTERCEPT_SHUTDOWN);
 	svm_set_intercept(svm, INTERCEPT_VMRUN);
-	svm_clr_intercept(svm, INTERCEPT_VMMCALL);
+	svm_set_intercept(svm, INTERCEPT_VMMCALL);
 	svm_clr_intercept(svm, INTERCEPT_VMLOAD);		/* DEVIRTZ: native */
 	svm_clr_intercept(svm, INTERCEPT_VMSAVE);		/* DEVIRTZ: native */
 	svm_clr_intercept(svm, INTERCEPT_STGI);			/* DEVIRTZ: native */
@@ -2388,6 +2388,14 @@ static int skinit_interception(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
+/* DEVIRTZ: Advance past VMMCALL + inject #UD to prevent infinite loop */
+static int vmmcall_interception(struct kvm_vcpu *vcpu)
+{
+	kvm_skip_emulated_instruction(vcpu);
+	kvm_queue_exception(vcpu, UD_VECTOR);
+	return 1;
+}
+
 static int task_switch_interception(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_svm *svm = to_svm(vcpu);
@@ -3281,7 +3289,7 @@ static int (*const svm_exit_handlers[])(struct kvm_vcpu *vcpu) = {
 	[SVM_EXIT_TASK_SWITCH]			= task_switch_interception,
 	[SVM_EXIT_SHUTDOWN]			= shutdown_interception,
 	[SVM_EXIT_VMRUN]			= vmrun_interception,
-	[SVM_EXIT_VMMCALL]			= kvm_emulate_hypercall,
+	[SVM_EXIT_VMMCALL]			= vmmcall_interception,
 	[SVM_EXIT_VMLOAD]			= vmload_interception,
 	[SVM_EXIT_VMSAVE]			= vmsave_interception,
 	[SVM_EXIT_STGI]				= stgi_interception,

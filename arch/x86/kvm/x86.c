@@ -3920,6 +3920,16 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 	case MSR_F15H_EX_CFG:
 		break;
 
+	/* DEVIRTZ: P-state definitions — silently accept writes.
+	 * CPPC request (0xc001029a) — passthrough to host hardware. */
+	case 0xc0010062 ... 0xc001006b:
+	case 0xc0010293:
+		break;
+	case 0xc001029a:
+		if (wrmsrq_safe(msr, data))
+			return 1;
+		break;
+
 	case MSR_IA32_UCODE_REV:
 		if (msr_info->host_initiated)
 			vcpu->arch.microcode_version = data;
@@ -4369,24 +4379,19 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 	case MSR_VM_HSAVE_PA:
 	case MSR_K8_INT_PENDING_MSG:
 	case MSR_AMD64_NB_CFG:
-	case MSR_FAM10H_MMIO_CONF_BASE:
+	case MSR_AMD64_PATCH_LOADER:
 	case MSR_AMD64_BU_CFG2:
-	case MSR_IA32_PERF_CTL:
 	case MSR_AMD64_DC_CFG:
 	case MSR_AMD64_TW_CFG:
 	case MSR_F15H_EX_CFG:
-	/*
-	 * Intel Sandy Bridge CPUs must support the RAPL (running average power
-	 * limit) MSRs. Just return 0, as we do not want to expose the host
-	 * data here. Do not conditionalize this on CPUID, as KVM does not do
-	 * so for existing CPU-specific MSRs.
-	 */
-	case MSR_RAPL_POWER_UNIT:
-	case MSR_PP0_ENERGY_STATUS:	/* Power plane 0 (core) */
-	case MSR_PP1_ENERGY_STATUS:	/* Power plane 1 (graphics uncore) */
-	case MSR_PKG_ENERGY_STATUS:	/* Total package */
-	case MSR_DRAM_ENERGY_STATUS:	/* DRAM controller */
-		msr_info->data = 0;
+		break;
+
+	/* DEVIRTZ: P-state/CPPC passthrough — read from host hardware */
+	case 0xc0010062 ... 0xc001006b:
+	case 0xc0010293:
+	case 0xc001029a:
+		if (rdmsrq_safe(msr_info->index, &msr_info->data))
+			return 1;
 		break;
 	case MSR_K7_EVNTSEL0 ... MSR_K7_EVNTSEL3:
 	case MSR_K7_PERFCTR0 ... MSR_K7_PERFCTR3:

@@ -1102,28 +1102,28 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 		svm_set_intercept(svm, INTERCEPT_SMI);
 
 	svm_set_intercept(svm, INTERCEPT_SELECTIVE_CR0);
-	svm_set_intercept(svm, INTERCEPT_RDPMC);
-	svm_clr_intercept(svm, INTERCEPT_CPUID); /* DEVIRTZ: native CPUID — debug */
-	svm_set_intercept(svm, INTERCEPT_INVD);
+	svm_clr_intercept(svm, INTERCEPT_RDPMC);		/* DEVIRTZ: native PMU */
+	svm_clr_intercept(svm, INTERCEPT_CPUID);		/* DEVIRTZ: native CPUID */
+	svm_clr_intercept(svm, INTERCEPT_INVD);		/* DEVIRTZ: native */
 	svm_set_intercept(svm, INTERCEPT_INVLPG);
-	svm_set_intercept(svm, INTERCEPT_INVLPGA);
+	svm_clr_intercept(svm, INTERCEPT_INVLPGA);		/* DEVIRTZ: native */
 	svm_set_intercept(svm, INTERCEPT_IOIO_PROT);
 	svm_set_intercept(svm, INTERCEPT_MSR_PROT);
-	svm_set_intercept(svm, INTERCEPT_TASK_SWITCH);
+	svm_clr_intercept(svm, INTERCEPT_TASK_SWITCH);		/* DEVIRTZ: native */
 	svm_set_intercept(svm, INTERCEPT_SHUTDOWN);
 	svm_set_intercept(svm, INTERCEPT_VMRUN);
 	svm_clr_intercept(svm, INTERCEPT_VMMCALL);
-	svm_set_intercept(svm, INTERCEPT_VMLOAD);
-	svm_set_intercept(svm, INTERCEPT_VMSAVE);
-	svm_set_intercept(svm, INTERCEPT_STGI);
-	svm_set_intercept(svm, INTERCEPT_CLGI);
-	svm_set_intercept(svm, INTERCEPT_SKINIT);
-	svm_set_intercept(svm, INTERCEPT_WBINVD);
+	svm_clr_intercept(svm, INTERCEPT_VMLOAD);		/* DEVIRTZ: native */
+	svm_clr_intercept(svm, INTERCEPT_VMSAVE);		/* DEVIRTZ: native */
+	svm_clr_intercept(svm, INTERCEPT_STGI);			/* DEVIRTZ: native */
+	svm_clr_intercept(svm, INTERCEPT_CLGI);			/* DEVIRTZ: native */
+	svm_clr_intercept(svm, INTERCEPT_SKINIT);		/* DEVIRTZ: native */
+	svm_clr_intercept(svm, INTERCEPT_WBINVD);		/* DEVIRTZ: native */
 	svm_set_intercept(svm, INTERCEPT_XSETBV);
 	svm_clr_intercept(svm, INTERCEPT_RDPRU);
 	svm_set_intercept(svm, INTERCEPT_RSM);
-	// svm_clr_intercept(svm, INTERCEPT_RDTSC);	/* DEVIRTZ: native TSC */
-	// svm_clr_intercept(svm, INTERCEPT_RDTSCP);	/* DEVIRTZ: native TSCP */
+	svm_clr_intercept(svm, INTERCEPT_RDTSC);		/* DEVIRTZ: native TSC */
+	svm_clr_intercept(svm, INTERCEPT_RDTSCP);		/* DEVIRTZ: native TSCP */
 
 	if (!kvm_mwait_in_guest(vcpu->kvm)) {
 		svm_set_intercept(svm, INTERCEPT_MONITOR);
@@ -2388,13 +2388,6 @@ static int skinit_interception(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
-static int vmmcall_interception(struct kvm_vcpu *vcpu)
-{
-	/* DEVIRTZ: Inject #UD for VMMCALL to hide KVM patching behavior */
-	kvm_queue_exception(vcpu, UD_VECTOR);
-	return 1;
-}
-
 static int task_switch_interception(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_svm *svm = to_svm(vcpu);
@@ -3288,7 +3281,7 @@ static int (*const svm_exit_handlers[])(struct kvm_vcpu *vcpu) = {
 	[SVM_EXIT_TASK_SWITCH]			= task_switch_interception,
 	[SVM_EXIT_SHUTDOWN]			= shutdown_interception,
 	[SVM_EXIT_VMRUN]			= vmrun_interception,
-	[SVM_EXIT_VMMCALL]			= vmmcall_interception,
+	[SVM_EXIT_VMMCALL]			= kvm_emulate_hypercall,
 	[SVM_EXIT_VMLOAD]			= vmload_interception,
 	[SVM_EXIT_VMSAVE]			= vmsave_interception,
 	[SVM_EXIT_STGI]				= stgi_interception,

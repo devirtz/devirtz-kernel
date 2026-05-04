@@ -817,6 +817,22 @@ static void svm_recalc_msr_intercepts(struct kvm_vcpu *vcpu)
 	svm_disable_intercept_for_msr(vcpu, MSR_IA32_APERF, MSR_TYPE_R);
 	svm_disable_intercept_for_msr(vcpu, MSR_IA32_MPERF, MSR_TYPE_R);
 
+	/*
+	 * DEVIRTZ: Native P-state reads.
+	 * MSR_AMD_PERF_CTL=0xC0010062, MSR_AMD_PERF_STATUS=0xC0010063,
+	 * MSR_AMD_PSTATE_DEF_BASE=0xC0010064 (+0..7). See asm/msr-index.h:658-660
+	 */
+	svm_disable_intercept_for_msr(vcpu, 0xc0010062, MSR_TYPE_RW);
+	svm_disable_intercept_for_msr(vcpu, 0xc0010063, MSR_TYPE_RW);
+	svm_disable_intercept_for_msr(vcpu, 0xc0010064, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, 0xc0010065, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, 0xc0010066, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, 0xc0010067, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, 0xc0010068, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, 0xc0010069, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, 0xc001006a, MSR_TYPE_R);
+	svm_disable_intercept_for_msr(vcpu, 0xc001006b, MSR_TYPE_R);
+
 	if (kvm_cpu_cap_has(X86_FEATURE_SHSTK)) {
 		bool shstk_enabled = guest_cpu_cap_has(vcpu, X86_FEATURE_SHSTK);
 
@@ -1079,10 +1095,10 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	svm_set_intercept(svm, INTERCEPT_CR4_WRITE);
 	svm_set_intercept(svm, INTERCEPT_CR8_WRITE);
 
-	set_dr_intercepts(svm);
+	clr_dr_intercepts(svm);  /* DEVIRTZ: native debug regs, see AMD APM Vol2 App.C SVM Intercept Codes */
 
 	set_exception_intercept(svm, PF_VECTOR);
-	set_exception_intercept(svm, UD_VECTOR); /* DEVIRTZ */
+	clr_exception_intercept(svm, UD_VECTOR);
 	set_exception_intercept(svm, MC_VECTOR);
 	set_exception_intercept(svm, AC_VECTOR);
 	set_exception_intercept(svm, DB_VECTOR);
@@ -1112,7 +1128,7 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	svm_clr_intercept(svm, INTERCEPT_TASK_SWITCH);		/* DEVIRTZ: native */
 	svm_set_intercept(svm, INTERCEPT_SHUTDOWN);
 	svm_set_intercept(svm, INTERCEPT_VMRUN);
-	svm_set_intercept(svm, INTERCEPT_VMMCALL);
+	svm_clr_intercept(svm, INTERCEPT_VMMCALL);
 	svm_clr_intercept(svm, INTERCEPT_VMLOAD);		/* DEVIRTZ: native */
 	svm_clr_intercept(svm, INTERCEPT_VMSAVE);		/* DEVIRTZ: native */
 	svm_clr_intercept(svm, INTERCEPT_STGI);			/* DEVIRTZ: native */
@@ -3289,8 +3305,8 @@ static int (*const svm_exit_handlers[])(struct kvm_vcpu *vcpu) = {
 	[SVM_EXIT_TASK_SWITCH]			= task_switch_interception,
 	[SVM_EXIT_SHUTDOWN]			= shutdown_interception,
 	[SVM_EXIT_VMRUN]			= vmrun_interception,
-	[SVM_EXIT_VMMCALL]			= vmmcall_interception,
-	[SVM_EXIT_VMLOAD]			= vmload_interception,
+	[SVM_EXIT_VMMCALL]			= kvm_emulate_hypercall,
+  [SVM_EXIT_VMLOAD]			= vmload_interception,
 	[SVM_EXIT_VMSAVE]			= vmsave_interception,
 	[SVM_EXIT_STGI]				= stgi_interception,
 	[SVM_EXIT_CLGI]				= clgi_interception,
